@@ -696,7 +696,6 @@ def upload_grades_csv(_xmodule_instance_args, _entry_id, course_id, _task_input,
     whitelisted_user_ids = [entry.user_id for entry in certificate_whitelist]
 
     # Loop over all our students and build our CSV lists in memory
-    header = None
     rows = []
     err_rows = [["id", "username", "error_msg"]]
     current_step = {'step': 'Calculating Grades'}
@@ -709,7 +708,18 @@ def upload_grades_csv(_xmodule_instance_args, _entry_id, course_id, _task_input,
         current_step,
         total_enrolled_students,
     )
-    # NAA TODO - Get the list of ALL subsections to put in the header
+
+    subsections = _graded_subsections_to_header(course_id)
+    rows.append(
+        ["id", "email", "username", "grade"] +
+        list(chain.from_iterable(subsections.values())) +
+        cohorts_header +
+        group_configs_header +
+        teams_header +
+        ['Enrollment Track', 'Verification Status'] +
+        certificate_info_header
+    )
+
     for student, course_grade, err_msg in CourseGradeFactory().iter(course, enrolled_students):
         # Periodically update task status (this is a cache write)
         if task_progress.attempted % status_interval == 0:
@@ -728,70 +738,66 @@ def upload_grades_csv(_xmodule_instance_args, _entry_id, course_id, _task_input,
             total_enrolled_students
         )
 
-        if course_grade:
-            # We were able to successfully grade this student for this course.
-            task_progress.succeeded += 1
-            if not header:
-                header = [section['label'] for section in course_grade.summary[u'section_breakdown']]
-                rows.append(
-                    ["id", "email", "username", "grade"] + header + cohorts_header +
-                    group_configs_header + teams_header +
-                    ['Enrollment Track', 'Verification Status'] + certificate_info_header
-                )
-
-            percents = {
-                section['label']: section.get('percent', 0.0)
-                for section in course_grade.summary[u'section_breakdown']
-                if 'label' in section
-            }
-
-            cohorts_group_name = []
-            if course_is_cohorted:
-                group = get_cohort(student, course_id, assign=False)
-                cohorts_group_name.append(group.name if group else '')
-
-            group_configs_group_names = []
-            for partition in experiment_partitions:
-                group = LmsPartitionService(student, course_id).get_group(partition, assign=False)
-                group_configs_group_names.append(group.name if group else '')
-
-            team_name = []
-            if teams_enabled:
-                try:
-                    membership = CourseTeamMembership.objects.get(user=student, team__course_id=course_id)
-                    team_name.append(membership.team.name)
-                except CourseTeamMembership.DoesNotExist:
-                    team_name.append('')
-
-            enrollment_mode = CourseEnrollment.enrollment_mode_for_user(student, course_id)[0]
-            verification_status = SoftwareSecurePhotoVerification.verification_status_for_user(
-                student,
-                course_id,
-                enrollment_mode
-            )
-            certificate_info = certificate_info_for_user(
-                student,
-                course_id,
-                course_grade.letter_grade,
-                student.id in whitelisted_user_ids
-            )
-
-            # Not everybody has the same gradable items. If the item is not
-            # found in the user's gradeset, just assume it's a 0. The aggregated
-            # grades for their sections and overall course will be calculated
-            # without regard for the item they didn't have access to, so it's
-            # possible for a student to have a 0.0 show up in their row but
-            # still have 100% for the course.
-            row_percents = [percents.get(label, 0.0) for label in header]
-            rows.append(
-                [student.id, student.email, student.username, course_grade.percent] +
-                row_percents + cohorts_group_name + group_configs_group_names + team_name +
-                [enrollment_mode] + [verification_status] + certificate_info
-            )
-        else:
+        if not course_grade:
             # An empty gradeset means we failed to grade a student.
             task_progress.failed += 1
             err_rows.append([student.id, student.username, err_msg])
+            continue
+
+        # We were able to successfully grade this student for this course.
+        task_progress.succeeded += 1
+
+        cohorts_group_name = []
+        if course_is_cohorted:
+            group = get_cohort(student, course_id, assign=False)
+            cohorts_group_name.append(group.name if group else '')
+
+        group_configs_group_names = []
+        for partition in experiment_partitions:
+            group = LmsPartitionService(student, course_id).get_group(partition, assign=False)
+            group_configs_group_names.append(group.name if group else '')
+
+        team_name = []
+        if teams_enabled:
+            try:
+                membership = CourseTeamMembership.objects.get(user=student, team__course_id=course_id)
+                team_name.append(membership.team.name)
+            except CourseTeamMembership.DoesNotExist:
+                team_name.append('')
+
+        enrollment_mode = CourseEnrollment.enrollment_mode_for_user(student, course_id)[0]
+        verification_status = SoftwareSecurePhotoVerification.verification_status_for_user(
+            student,
+            course_id,
+            enrollment_mode
+        )
+        certificate_info = certificate_info_for_user(
+            student,
+            course_id,
+            course_grade.letter_grade,
+            student.id in whitelisted_user_ids
+        )
+
+        subsection_grades = []
+        for subsection_location in subsections:
+            try:
+                subsection_grade = course_grade.locations_to_subsection_grades[subsection_location]
+            except KeyError:
+                subsection_grades.append(['Not Accessible', 'Not Accessible'])
+            else:
+                if subsection_grade.graded_total.attempted:
+                    subsection_grades.append(
+                        [subsection_grade.graded_total.earned, subsection_grade.graded_total.possible]
+                    )
+                else:
+                    subsection_grades.append(['Not Attempted', subsection_grade.graded_total.possible])
+        subsection_grades_row = list(chain.from_iterable(subsection_grades))
+
+        rows.append(
+            [student.id, student.email, student.username, course_grade.percent] +
+            subsection_grades_row + cohorts_group_name + group_configs_group_names + team_name +
+            [enrollment_mode] + [verification_status] + certificate_info
+        )
 
     TASK_LOG.info(
         u'%s, Task type: %s, Current step: %s, Grade calculation completed for students: %s/%s',
@@ -819,33 +825,59 @@ def upload_grades_csv(_xmodule_instance_args, _entry_id, course_id, _task_input,
     return task_progress.update_task_state(extra_meta=current_step)
 
 
-def _order_graded_scorable_blocks(course_key):
+def _iter_graded_subsections(course_key):
     """
-    Sort each graded scorable block by the assignment type and
-    subsection that it belongs to.
-
-    Returns:
-        an OrderedDict that maps a scorable block's id to its
-        headers in the final report.
+    Yields each graded subsection in the given course with the subsection's:
+        assignment type name
+        index within the assignment type
+        subsection_info dict as returned by grading_context.
     """
-    scorable_blocks = OrderedDict()
     grading_context = grading_context_for_course(course_key)
     for assignment_type_name, subsection_infos in grading_context['all_graded_subsections_by_type'].iteritems():
         for subsection_index, subsection_info in enumerate(subsection_infos, start=1):
             subsection = subsection_info['subsection_block']
             if subsection.graded:
-                for scorable_block in subsection_info['scored_descendants']:
-                    header_name = (
-                        u"{assignment_type} {subsection_index}: "
-                        u"{subsection_name} - {scorable_block_name}"
-                    ).format(
-                        scorable_block_name=scorable_block.display_name,
-                        assignment_type=assignment_type_name,
-                        subsection_index=subsection_index,
-                        subsection_name=subsection.display_name,
-                    )
-                    scorable_blocks[scorable_block.location] = [header_name + " (Earned)", header_name + " (Possible)"]
-    return scorable_blocks
+                yield assignment_type_name, subsection_index, subsection_info
+
+
+def _graded_subsections_to_header(course_key):
+    """
+    Returns an OrderedDict that maps a subsection's location to its
+    headers in the final report.
+    """
+    graded_subsections_map = OrderedDict()
+    for assignment_type_name, subsection_index, subsection_info in _iter_graded_subsections(course_key):
+        header_name = u"{assignment_type} {subsection_index}: {subsection_name}".format(
+            assignment_type=assignment_type_name,
+            subsection_index=subsection_index,
+            subsection_name=subsection_info['subsection_block'].display_name,
+        )
+        graded_subsections_map[subsection_info['subsection_block'].location] = [
+            header_name + " (Earned)",
+            header_name + " (Possible)",
+        ]
+    return graded_subsections_map
+
+
+def _graded_scorable_blocks_to_header(course_key):
+    """
+    Returns an OrderedDict that maps a scorable block's id to its
+    headers in the final report.
+    """
+    scorable_blocks_map = OrderedDict()
+    for assignment_type_name, subsection_index, subsection_info in _iter_graded_subsections(course_key):
+        for scorable_block in subsection_info['scored_descendants']:
+            header_name = (
+                u"{assignment_type} {subsection_index}: "
+                u"{subsection_name} - {scorable_block_name}"
+            ).format(
+                scorable_block_name=scorable_block.display_name,
+                assignment_type=assignment_type_name,
+                subsection_index=subsection_index,
+                subsection_name=subsection_info['subsection_block'].display_name,
+            )
+            scorable_blocks_map[scorable_block.location] = [header_name + " (Earned)", header_name + " (Possible)"]
+    return scorable_blocks_map
 
 
 def upload_problem_responses_csv(_xmodule_instance_args, _entry_id, course_id, task_input, action_name):
@@ -898,7 +930,7 @@ def upload_problem_grade_report(_xmodule_instance_args, _entry_id, course_id, _t
     # as the keys.  It is structured in this way to keep the values related.
     header_row = OrderedDict([('id', 'Student ID'), ('email', 'Email'), ('username', 'Username')])
 
-    graded_scorable_blocks = _order_graded_scorable_blocks(course_id)
+    graded_scorable_blocks = _graded_scorable_blocks_to_header(course_id)
 
     # Just generate the static fields for now.
     rows = [list(header_row.values()) + ['Final Grade'] + list(chain.from_iterable(graded_scorable_blocks.values()))]
@@ -918,7 +950,7 @@ def upload_problem_grade_report(_xmodule_instance_args, _entry_id, course_id, _t
             task_progress.failed += 1
             continue
 
-        earned_possible_values = list()
+        earned_possible_values = []
         for block_location in graded_scorable_blocks:
             try:
                 problem_score = course_grade.locations_to_scores[block_location]

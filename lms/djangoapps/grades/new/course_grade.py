@@ -65,6 +65,17 @@ class CourseGrade(object):
         return locations_to_scores
 
     @lazy
+    def locations_to_subsection_grades(self):
+        """
+        Returns a dict of subsection grades keyed by their locations.
+        """
+        locations_to_grades = {}
+        for chapter in self.chapter_grades:
+            for subsection_grade in chapter['sections']:
+                locations_to_grades[subsection_grade.location] = subsection_grade
+        return locations_to_grades
+
+    @lazy
     def grade_value(self):
         """
         Helper function to extract the grade value as calculated by the course's grader.

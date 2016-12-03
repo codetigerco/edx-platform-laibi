@@ -803,14 +803,14 @@ ROOT_URLCONF = 'lms.urls'
 
 # Platform Email
 EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'
-DEFAULT_FROM_EMAIL = 'registration@example.com'
-DEFAULT_FEEDBACK_EMAIL = 'feedback@example.com'
-SERVER_EMAIL = 'devops@example.com'
-TECH_SUPPORT_EMAIL = 'technical@example.com'
-CONTACT_EMAIL = 'info@example.com'
-BUGS_EMAIL = 'bugs@example.com'
-UNIVERSITY_EMAIL = 'university@example.com'
-PRESS_EMAIL = 'press@example.com'
+DEFAULT_FROM_EMAIL = 'registration@stancelabs.com'
+DEFAULT_FEEDBACK_EMAIL = 'feedback@stancelabs.com'
+SERVER_EMAIL = 'devops@stancelabs.com'
+TECH_SUPPORT_EMAIL = 'technical@stancelabs.com'
+CONTACT_EMAIL = 'info@stancelabs.com'
+BUGS_EMAIL = 'bugs@stancelabs.com'
+UNIVERSITY_EMAIL = 'university@stancelabs.com'
+PRESS_EMAIL = 'press@stancelabs.com'
 FINANCE_EMAIL = ''
 
 # Platform mailing address
@@ -1001,7 +1001,7 @@ ZENDESK_API_KEY = None
 EMBARGO_SITE_REDIRECT_URL = None
 
 ##### shoppingcart Payment #####
-PAYMENT_SUPPORT_EMAIL = 'payment@example.com'
+PAYMENT_SUPPORT_EMAIL = 'payment@stancelabs.com'
 
 ##### Using cybersource by default #####
 
@@ -1819,7 +1819,7 @@ BLOCK_STRUCTURES_SETTINGS = dict(
 
 # Suffix used to construct 'from' email address for bulk emails.
 # A course-specific identifier is prepended.
-BULK_EMAIL_DEFAULT_FROM_EMAIL = 'no-reply@example.com'
+BULK_EMAIL_DEFAULT_FROM_EMAIL = 'no-reply@stancelabs.com'
 
 # Parameters for breaking down course enrollment into subtasks.
 BULK_EMAIL_EMAILS_PER_TASK = 100
@@ -3006,8 +3006,8 @@ DEFAULT_SITE_THEME = None
 ENABLE_COMPREHENSIVE_THEMING = True
 
 # API access management
-API_ACCESS_MANAGER_EMAIL = 'api-access@example.com'
-API_ACCESS_FROM_EMAIL = 'api-requests@example.com'
+API_ACCESS_MANAGER_EMAIL = 'api-access@stancelabs.com'
+API_ACCESS_FROM_EMAIL = 'api-requests@stancelabs.com'
 API_DOCUMENTATION_URL = 'http://course-catalog-api-guide.readthedocs.io/en/latest/'
 AUTH_DOCUMENTATION_URL = 'http://course-catalog-api-guide.readthedocs.io/en/latest/authentication/index.html'
 

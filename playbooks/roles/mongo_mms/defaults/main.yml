@@ -1,0 +1,12 @@
+
+base_url: "https://mms.mongodb.com/download/agent/monitoring"
+pkg_arch: "amd64"
+pkg_format: "deb"
+
+agents:
+  - agent: mongodb-mms-monitoring-agent
+    version: "5.0.0.309-1"
+    config: "/etc/mongodb-mms/monitoring-agent.config"
+  - agent: mongodb-mms-backup-agent
+    version: "4.3.0.384-1"
+    config: "/etc/mongodb-mms/backup-agent.config"

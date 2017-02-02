@@ -1,27 +1,19 @@
-# .gitignore for edx-platform.
-# There's a lot here, please try to keep it organized.
-
-### Files private to developers
-
-requirements/private.txt
-lms/envs/private.py
-cms/envs/private.py
-
-### Python artifacts
-*.pyc
-
-### Editor and IDE artifacts
-*~
 *.swp
-*.orig
-/nbproject
+*.pyc
 .idea/
-.redcar/
-codekit-config.json
-.pycharm_helpers/
+.vagrant
+\#*\#
+*~
+.#*
 
-### NFS artifacts
-.nfs*
+vagrant/*/*/edx-platform
+vagrant/*/*/cs_comments_service
+vagrant/*/*/ora
+vagrant/*/*/analytics_api
+vagrant/*/*/insights
+vagrant/*/*/ecommerce
+vagrant/*/*/programs
+vagrant_ansible_inventory_default
 
 ### OS X artifacts
 *.DS_Store
@@ -108,3 +100,9 @@ lms/lib/comment_client/python
 autodeploy.properties
 .ws_migrations_complete
 dist
+## Make artifacts
+.build
+playbooks/edx-east/travis-test.yml
+
+## Local virtualenv
+/venv

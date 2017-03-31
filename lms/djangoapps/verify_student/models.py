@@ -44,7 +44,11 @@ from lms.djangoapps.verify_student.ssencrypt import (
 )
 from xmodule.modulestore.django import modulestore
 from xmodule.modulestore.exceptions import ItemNotFoundError
+<<<<<<< HEAD
 from xmodule_django.models import CourseKeyField
+=======
+from openedx.core.djangoapps.xmodule_django.models import CourseKeyField
+>>>>>>> 8cc6bf4a1671cf33a101ca29c3b110883925a4cf
 from openedx.core.djangoapps.site_configuration import helpers as configuration_helpers
 
 log = logging.getLogger(__name__)
@@ -258,6 +262,28 @@ class PhotoVerification(StatusModel):
         ).order_by('-created_at')
 
     @classmethod
+    def get_expiration_datetime(cls, user, queryset=None):
+        """
+        Check whether the user has an approved verification and return the
+        "expiration_datetime" of most recent "approved" verification.
+
+        Arguments:
+            user (Object): User
+            queryset: If a queryset is provided, that will be used instead
+                of hitting the database.
+
+        Returns:
+            expiration_datetime: expiration_datetime of most recent "approved"
+            verification.
+        """
+        if queryset is None:
+            queryset = cls.objects.filter(user=user)
+
+        photo_verification = queryset.filter(status='approved').first()
+        if photo_verification:
+            return photo_verification.expiration_datetime
+
+    @classmethod
     def user_has_valid_or_pending(cls, user, earliest_allowed_date=None, queryset=None):
         """
         Check whether the user has an active or pending verification attempt
@@ -384,7 +410,7 @@ class PhotoVerification(StatusModel):
 
         Arguments:
             deadline (datetime): The date at which the verification was active
-                (created before and expired after).
+                (created before and expiration datetime is after today).
 
         Returns:
             bool
@@ -392,7 +418,7 @@ class PhotoVerification(StatusModel):
         """
         return (
             self.created_at < deadline and
-            self.expiration_datetime > deadline
+            self.expiration_datetime > datetime.now(pytz.UTC)
         )
 
     def parsed_error_msg(self):
@@ -633,12 +659,14 @@ class SoftwareSecurePhotoVerification(PhotoVerification):
         # explicitly enable these in your private settings.
         if settings.FEATURES.get('AUTOMATIC_VERIFY_STUDENT_IDENTITY_FOR_TESTING'):
             return
-
+        """
         aes_key_str = settings.VERIFY_STUDENT["SOFTWARE_SECURE"]["FACE_IMAGE_AES_KEY"]
         aes_key = aes_key_str.decode("hex")
-
+        """
         path = self._get_path("face")
-        buff = ContentFile(encrypt_and_encode(img_data, aes_key))
+        #####buff = ContentFile(encrypt_and_encode(img_data, aes_key))
+        
+        buff = ContentFile(img_data)
         self._storage.save(path, buff)
 
     @status_before_must_be("created")
@@ -662,18 +690,20 @@ class SoftwareSecurePhotoVerification(PhotoVerification):
             self.photo_id_key = 'fake-photo-id-key'
             self.save()
             return
-
+        """
         aes_key = random_aes_key()
         rsa_key_str = settings.VERIFY_STUDENT["SOFTWARE_SECURE"]["RSA_PUBLIC_KEY"]
         rsa_encrypted_aes_key = rsa_encrypt(aes_key, rsa_key_str)
-
+       """
         # Save this to the storage backend
         path = self._get_path("photo_id")
-        buff = ContentFile(encrypt_and_encode(img_data, aes_key))
+        #####buff = ContentFile(encrypt_and_encode(img_data, aes_key))
+        
+        buff = ContentFile(img_data)
         self._storage.save(path, buff)
 
         # Update our record fields
-        self.photo_id_key = rsa_encrypted_aes_key.encode('base64')
+        #self.photo_id_key = rsa_encrypted_aes_key.encode('base64')
         self.save()
 
     @status_before_must_be("must_retry", "ready", "submitted")
@@ -699,8 +729,11 @@ class SoftwareSecurePhotoVerification(PhotoVerification):
                 self.status = "must_retry"
                 self.error_msg = response.text
                 self.save()
-        except Exception as error:
-            log.exception(error)
+        except Exception:       # pylint: disable=broad-except
+            log.exception(
+                'Software Secure submission failed for user %s, setting status to must_retry',
+                self.user.username
+            )
             self.status = "must_retry"
             self.save()
 
@@ -943,6 +976,18 @@ class SoftwareSecurePhotoVerification(PhotoVerification):
             return 'Not ID Verified'
         else:
             return 'ID Verified'
+
+    @classmethod
+    def is_verification_expiring_soon(cls, expiration_datetime):
+        """
+        Returns True if verification is expiring within EXPIRING_SOON_WINDOW.
+        """
+        if expiration_datetime:
+            if (expiration_datetime - datetime.now(pytz.UTC)).days <= settings.VERIFY_STUDENT.get(
+                    "EXPIRING_SOON_WINDOW"):
+                return True
+
+        return False
 
 
 class VerificationDeadline(TimeStampedModel):

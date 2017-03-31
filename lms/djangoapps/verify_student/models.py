@@ -655,12 +655,14 @@ class SoftwareSecurePhotoVerification(PhotoVerification):
         # explicitly enable these in your private settings.
         if settings.FEATURES.get('AUTOMATIC_VERIFY_STUDENT_IDENTITY_FOR_TESTING'):
             return
-
+        """
         aes_key_str = settings.VERIFY_STUDENT["SOFTWARE_SECURE"]["FACE_IMAGE_AES_KEY"]
         aes_key = aes_key_str.decode("hex")
-
+        """
         path = self._get_path("face")
-        buff = ContentFile(encrypt_and_encode(img_data, aes_key))
+        #####buff = ContentFile(encrypt_and_encode(img_data, aes_key))
+        
+        buff = ContentFile(img_data)
         self._storage.save(path, buff)
 
     @status_before_must_be("created")
@@ -684,18 +686,20 @@ class SoftwareSecurePhotoVerification(PhotoVerification):
             self.photo_id_key = 'fake-photo-id-key'
             self.save()
             return
-
+        """
         aes_key = random_aes_key()
         rsa_key_str = settings.VERIFY_STUDENT["SOFTWARE_SECURE"]["RSA_PUBLIC_KEY"]
         rsa_encrypted_aes_key = rsa_encrypt(aes_key, rsa_key_str)
-
+       """
         # Save this to the storage backend
         path = self._get_path("photo_id")
-        buff = ContentFile(encrypt_and_encode(img_data, aes_key))
+        #####buff = ContentFile(encrypt_and_encode(img_data, aes_key))
+        
+        buff = ContentFile(img_data)
         self._storage.save(path, buff)
 
         # Update our record fields
-        self.photo_id_key = rsa_encrypted_aes_key.encode('base64')
+        #self.photo_id_key = rsa_encrypted_aes_key.encode('base64')
         self.save()
 
     @status_before_must_be("must_retry", "ready", "submitted")
